@@ -22,8 +22,8 @@ import logging
 import os
 import re
 import sys
-import urllib
-import urllib2
+import urllib.request, urllib.parse, urllib.error
+import urllib.request, urllib.error, urllib.parse
 from xml.etree import ElementTree
 
 import xmltodict
@@ -41,6 +41,57 @@ _CHUNK_SIZE = 16 * 1024
 # A giant dictionary of AdWords versions, the services they support, and which
 # namespace those services are in.
 _SERVICE_MAP = {
+    'v201710': {
+        'AccountLabelService': 'mcm',
+        'AdCustomizerFeedService': 'cm',
+        'AdGroupAdService': 'cm',
+        'AdGroupBidModifierService': 'cm',
+        'AdGroupCriterionService': 'cm',
+        'AdGroupExtensionSettingService': 'cm',
+        'AdGroupFeedService': 'cm',
+        'AdGroupService': 'cm',
+        'AdParamService': 'cm',
+        'AdwordsUserListService': 'rm',
+        'BatchJobService': 'cm',
+        'BiddingStrategyService': 'cm',
+        'BudgetOrderService': 'billing',
+        'BudgetService': 'cm',
+        'CampaignBidModifierService': 'cm',
+        'CampaignCriterionService': 'cm',
+        'CampaignExtensionSettingService': 'cm',
+        'CampaignFeedService': 'cm',
+        'CampaignGroupPerformanceTargetService': 'cm',
+        'CampaignGroupService': 'cm',
+        'CampaignService': 'cm',
+        'CampaignSharedSetService': 'cm',
+        'ConstantDataService': 'cm',
+        'ConversionTrackerService': 'cm',
+        'CustomerExtensionSettingService': 'cm',
+        'CustomerFeedService': 'cm',
+        'CustomerNegativeCriterionService': 'cm',
+        'CustomerService': 'mcm',
+        'CustomerSyncService': 'ch',
+        'DataService': 'cm',
+        'DraftAsyncErrorService': 'cm',
+        'DraftService': 'cm',
+        'FeedItemService': 'cm',
+        'FeedMappingService': 'cm',
+        'FeedService': 'cm',
+        'LabelService': 'cm',
+        'LocationCriterionService': 'cm',
+        'ManagedCustomerService': 'mcm',
+        'MediaService': 'cm',
+        'OfflineCallConversionFeedService': 'cm',
+        'OfflineConversionFeedService': 'cm',
+        'OfflineDataUploadService': 'rm',
+        'ReportDefinitionService': 'cm',
+        'SharedCriterionService': 'cm',
+        'SharedSetService': 'cm',
+        'TargetingIdeaService': 'o',
+        'TrafficEstimatorService': 'o',
+        'TrialAsyncErrorService': 'cm',
+        'TrialService': 'cm'
+    },
     'v201802': {
         'AccountLabelService': 'mcm',
         'AdCustomizerFeedService': 'cm',
@@ -354,10 +405,10 @@ class AdWordsClient(googleads.common.CommonClient):
 
       if version in _SERVICE_MAP:
         raise googleads.errors.GoogleAdsValueError(
-            msg_fmt % ('service', service_name, _SERVICE_MAP[version].keys()))
+            msg_fmt % ('service', service_name, list(_SERVICE_MAP[version].keys())))
       else:
         raise googleads.errors.GoogleAdsValueError(
-            msg_fmt % ('version', version, _SERVICE_MAP.keys()))
+            msg_fmt % ('version', version, list(_SERVICE_MAP.keys())))
 
     service = googleads.common.GetServiceClassForLibrary(self.soap_impl)(
         self._SOAP_SERVICE_FORMAT % (
@@ -550,7 +601,7 @@ class _AdWordsHeaderHandler(googleads.common.HeaderHandler):
       except KeyError:
         raise googleads.errors.GoogleAdsValueError(
             'The provided keyword "%s" is invalid. Accepted keywords are: %s'
-            % (kw, _REPORT_HEADER_KWARGS.keys()))
+            % (kw, list(_REPORT_HEADER_KWARGS.keys())))
 
     return headers
 
@@ -579,10 +630,8 @@ class _AdWordsPacker(googleads.common.SoapPacker):
 class BatchJobHelper(object):
   """A utility that simplifies working with the BatchJobService."""
 
-  class AbstractResponseParser(object):
+  class AbstractResponseParser(object, metaclass=abc.ABCMeta):
     """Interface for parsing responses from the BatchJobService."""
-
-    __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
     def ParseResponse(self, batch_job_response):
@@ -608,10 +657,8 @@ class BatchJobHelper(object):
       """
       return xmltodict.parse(batch_job_response)
 
-  class AbstractUploadRequestBuilder(object):
+  class AbstractUploadRequestBuilder(object, metaclass=abc.ABCMeta):
     """Interface for building requests used to upload batch job operations."""
-
-    __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
     def BuildUploadRequest(self, upload_url, operations, **kwargs):
@@ -752,7 +799,7 @@ class BatchJobHelper(object):
           operations,
           has_prefix=current_content_length == 0,
           has_suffix=is_last)
-      req = urllib2.Request(upload_url)
+      req = urllib.request.Request(upload_url)
       req.add_header('Content-Type', 'application/xml')
       # Determine length of this message and the required padding.
       new_content_length = current_content_length
@@ -1075,11 +1122,11 @@ class IncrementalUploadHelper(object):
           'Current content length %s is < 0.' % current_content_length)
     self._current_content_length = current_content_length
     self._is_last = is_last
-    self._url_opener = urllib2.build_opener(
+    self._url_opener = urllib.request.build_opener(
         *self._request_builder.client.proxy_config.GetHandlers())
     if self._request_builder.client.custom_http_headers:
       self._url_opener.addheaders.extend(
-          self._request_builder.client.custom_http_headers.items())
+          list(self._request_builder.client.custom_http_headers.items()))
 
     self._upload_url = self._InitializeURL(upload_url, current_content_length)
 
@@ -1106,7 +1153,7 @@ class IncrementalUploadHelper(object):
     }
 
     # Send an HTTP POST request to the given upload_url
-    req = urllib2.Request(upload_url, data={}, headers=headers)
+    req = urllib.request.Request(upload_url, data={}, headers=headers)
     resp = self._url_opener.open(req)
 
     return resp.headers['location']
@@ -1166,7 +1213,7 @@ class IncrementalUploadHelper(object):
       if _batch_job_logger.isEnabledFor(logging.INFO):
         _batch_job_logger.info('Request summary: %s',
                                self._ExtractRequestSummaryFields(req))
-    except urllib2.HTTPError as e:
+    except urllib.error.HTTPError as e:
       if e.code != 308:
         if _batch_job_logger.isEnabledFor(logging.WARNING):
           _batch_job_logger.warning(
@@ -1253,10 +1300,10 @@ class ReportDownloader(object):
         self._adwords_client.custom_http_headers)
     self.proxy_config = self._adwords_client.proxy_config
     handlers = self.proxy_config.GetHandlers()
-    self.url_opener = urllib2.build_opener(*handlers)
+    self.url_opener = urllib.request.build_opener(*handlers)
     if self._adwords_client.custom_http_headers:
       self.url_opener.addheaders.extend(
-          adwords_client.custom_http_headers.items())
+          list(adwords_client.custom_http_headers.items()))
 
     schema_url = self._SCHEMA_FORMAT % (server, version)
     service_class = (googleads.common
@@ -1448,6 +1495,9 @@ class ReportDownloader(object):
       response = self._DownloadReportAsStream(
           self._SerializeReportDefinition(report_definition), **kwargs)
       return response.read().decode('utf-8')
+    except Exception as e:
+      _report_logger.error('Raised an error in DownloadReportAsString.')
+      return e
     finally:
       if response:
         response.close()
@@ -1638,7 +1688,7 @@ class ReportDownloader(object):
     if sys.version_info[0] == 3:
       post_body = bytes(post_body, 'utf8')
 
-    request = urllib2.Request(
+    request = urllib.request.Request(
         self._end_point, post_body,
         self._header_handler.GetReportDownloadHeaders(**kwargs))
     try:
@@ -1658,11 +1708,11 @@ class ReportDownloader(object):
                              self._ExtractResponseHeaders(response.headers),
                              response.code, response.msg)
       return response
-    except urllib2.HTTPError as e:
+    except urllib.error.HTTPError as e:
       error = self._ExtractError(e)
       if _report_logger.isEnabledFor(logging.WARNING):
         _report_logger.warning(
-            'Request Summary: %s', self._ExtractRequestSummaryFields(
+            'Error Request Summary: %s', self._ExtractRequestSummaryFields(
                 request, error=error))
       raise error
 
@@ -1748,7 +1798,7 @@ class ReportDownloader(object):
       The given query and format URL encoded into the format needed for an
       AdWords report request as a string. This is intended to be a POST body.
     """
-    return urllib.urlencode({'__fmt': file_format, '__rdquery': str(query)})
+    return urllib.parse.urlencode({'__fmt': file_format, '__rdquery': str(query)})
 
   def _SerializeReportDefinition(self, report_definition):
     """Serializes a report definition for transport.
@@ -1762,7 +1812,7 @@ class ReportDownloader(object):
       the format needed for an AdWords report request as a string. This is
       intended to be a POST body.
     """
-    return urllib.urlencode(
+    return urllib.parse.urlencode(
         {'__rdxml': self.schema_helper.GetSoapXMLForComplexType(
             self._REPORT_DEFINITION_NAME, report_definition)})
 
@@ -2085,14 +2135,14 @@ class _WhereBuilder(object):
 
   def _CreateSingleValueCondition(self, value, operator):
     """Creates a single-value condition with the provided value and operator."""
-    if isinstance(value, str) or isinstance(value, unicode):
+    if isinstance(value, str) or isinstance(value, str):
       value = '"%s"' % value
     return '%s %s %s' % (self._field, operator, value)
 
   def _CreateMultipleValuesCondition(self, values, operator):
     """Creates a condition with the provided list of values and operator."""
     values = ['"%s"' % value if isinstance(value, str) or
-              isinstance(value, unicode) else str(value) for value in values]
+              isinstance(value, str) else str(value) for value in values]
     return '%s %s [%s]' % (self._field, operator, ', '.join(values))
 
 
@@ -2495,11 +2545,8 @@ class ServiceQuery(object):
     # method of determining if there is still a page left.
     if (self._PAGE_TYPE in page
         and page[self._PAGE_TYPE] in self._BID_LANDSCAPE_PAGES):
-      if self._ENTRIES in page:
-        total_landscape_points = sum([len(bid_landscape[self._LANDSCAPE_POINTS])
-                                      for bid_landscape in page[self._ENTRIES]])
-      else:
-        total_landscape_points = 0
+      total_landscape_points = sum([len(bid_landscape[self._LANDSCAPE_POINTS])
+                                    for bid_landscape in page[self._ENTRIES]])
       return total_landscape_points >= self._page_size
 
     if not self._total_num_entries:
