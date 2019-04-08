@@ -1,14 +1,51 @@
+18.1.0 -- 04/03/2018
+* Upgrade PyYAML to 5.1 >= 6.0
+* Update comment in get_all_images_and_videos examples
+
+18.0.0 -- 03/28/2019
+* Removed support for AdWords v201806
+
+17.0.0 -- 02/12/2019
+* Added support for Ad Manager v201902.
+* Removed support for Ad Manager v201802.
+* Removed examples for Ad Manager v201805.
+
+16.0.0 -- 01/29/2019
+* Removed support for AdWords v201802
+
+15.0.2 -- 01/08/2019
+* Updated PyYAML dependencies to >=4.2b1 for https://nvd.nist.gov/vuln/detail/CVE-2017-18342
+
+15.0.1 -- 11/16/2018
+* Added Smart Shopping ad example (v201809)
+
+15.0.0 -- 11/14/2018
+* Added support for v201811.
+* Removed support for v201711.
+* Removed examples for v201802.
+* Remove ContentMetadataKeyHierarchyService
+* Added version parameter to PQL utilities to account for statement
+  differences among API versions. This parameter defaults to the most recent
+  API version. If you update your Python client library but don't plan on
+  migrating to the newest API version, you might need to explicitly declare the
+  version for the PQL utility to use.
+
+14.1.0 -- 09/21/18
+* Added support and examples for AdWords v201809.
+* Resolved issues:
+- Issue 281: https://github.com/googleads/googleads-python-lib/issues/281
+
 14.0.0 -- 08/21/18
-- DFP rebranded to Google Ad Manager.
-- Google Ad Manager v201808 release.
-- Removed support for DFP v201708.
-- Removed examples for DFP v201711.
+* DFP rebranded to Google Ad Manager.
+* Google Ad Manager v201808 release.
+* Removed support for DFP v201708.
+* Removed examples for DFP v201711.
 
 13.0.0 -- 07/25/18
-- Removed support for AdWords v201710.
+* Removed support for AdWords v201710.
 
 12.2.0 -- 06/18/18
-- Fixed some DFP examples that would loop forever with Zeep.
+* Fixed some DFP examples that would loop forever with Zeep.
 
 12.1.0 -- 06/06/18
 * Added support and examples for AdWords v201806.
