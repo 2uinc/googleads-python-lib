@@ -430,6 +430,7 @@ class AdWordsClientTest(unittest.TestCase):
             googleads.adwords._AdWordsPacker,
             'proxy_config',
             'timeout',
+            CURRENT_VERSION,
             cache='cache')
         self.assertEqual(service, mock_service)
 
@@ -504,11 +505,12 @@ class AdWordsPackerTest(unittest.TestCase):
     query_regex = (r'SELECT (.*) WHERE Status = "ENABLED"'
                    r' ORDER BY Name ASC LIMIT 0,100')
 
-    self.assertRegexpMatches(self.packer.Pack(query), query_regex)
+    self.assertRegexpMatches(self.packer.Pack(query, CURRENT_VERSION),
+                             query_regex)
 
   def testAdWordsPackerForUnsupportedObjectType(self):
     obj = object()
-    self.assertEqual(self.packer.Pack(obj), obj)
+    self.assertEqual(self.packer.Pack(obj, CURRENT_VERSION), obj)
 
 
 class BatchJobHelperTest(testing.CleanUtilityRegistryTestCase):
@@ -1784,6 +1786,11 @@ class ReportDownloaderTest(testing.CleanUtilityRegistryTestCase):
     self.report_downloader = self.GetReportDownloader()
     self.report_downloader.url_opener = self.opener
 
+    test_dir = os.path.dirname(__file__)
+    with open(os.path.join(
+        test_dir, 'test_data/unicode_test_data.txt')) as handler:
+      self.budget_template = handler.read()
+
   def testSetsCustomHeaders(self):
 
     class MyOpener(object):
@@ -1853,6 +1860,26 @@ class ReportDownloaderTest(testing.CleanUtilityRegistryTestCase):
     self.header_handler.GetReportDownloadHeaders.assert_called_once_with(
         include_zero_impressions=True, use_raw_enum_values=False)
 
+  def testDownloadReportWithUnicodeReportDataIssue281(self):
+    """This test verifies that issue #281 has been resolved.
+
+    https://github.com/googleads/googleads-python-lib/issues/281
+
+    Intentionally reads in a lot of unicode data with small chunk size to
+    replicate issue where chunked data read in _DownloadReport on Python 3
+    would cause a UnicodeDecodeError if multi-byte character were truncated.
+    """
+    test_dir = os.path.dirname(__file__)
+    googleads.adwords._CHUNK_SIZE = 10  # Small chunk size used to replicate.
+
+    with mock.patch.object(self.report_downloader,
+                           '_DownloadReportAsStream') as stream:
+      stream.return_value = open(os.path.join(
+          test_dir, 'test_data/unicode_test_data.txt'), 'rb')
+      report_definition = {'downloadFormat': 'CSV'}
+      s = six.StringIO()
+      self.report_downloader.DownloadReport(report_definition, output=s)
+
   def testDownloadReportCheckFormat_CSVStringSuccess(self):
     output_file = six.StringIO()
 
@@ -1863,16 +1890,17 @@ class ReportDownloaderTest(testing.CleanUtilityRegistryTestCase):
                 'unexpectedly!')
 
   def testDownloadReportCheckFormat_GZIPPEDBinaryFileSuccess(self):
-    output_file = six.StringIO()
+    output_file = tempfile.TemporaryFile(mode='wb')
 
     try:
-      self.report_downloader._DownloadReportCheckFormat('CSV', output_file)
+      self.report_downloader._DownloadReportCheckFormat(
+          'GZIPPED_CSV', output_file)
     except googleads.errors.GoogleAdsValueError:
       self.fail('_DownloadReportCheckFormat raised GoogleAdsValueError'
                 'unexpectedly!')
 
   def testDownloadReportCheckFormat_GZIPPEDBytesIOSuccess(self):
-    output_file = tempfile.TemporaryFile(mode='wb')
+    output_file = six.BytesIO()
 
     try:
       self.report_downloader._DownloadReportCheckFormat('GZIPPED_CSV',
@@ -1882,31 +1910,13 @@ class ReportDownloaderTest(testing.CleanUtilityRegistryTestCase):
                 'unexpectedly!')
 
   def testDownloadReportCheckFormat_GZIPPEDStringFailure(self):
-    output_file = six.StringIO()
-
-    self.assertRaises(googleads.errors.GoogleAdsValueError,
-                      self.report_downloader._DownloadReportCheckFormat,
-                      'GZIPPED_CSV', output_file)
-
-  def testDownloadReportCheckFormat_Issue152(self):
-    output_file = six.StringIO()
-    output_file.mode = 'w+b'  # Verify writing and reading works.
-
-    try:
-      self.report_downloader._DownloadReportCheckFormat(
-          'GZIPPED_CSV', output_file)
-    except googleads.errors.GoogleAdsValueError:
-      self.fail('_DownloadReportCheckFormat raised GoogleAdsValueError'
-                'unexpectedly!')
-
-    output_file.mode = 'r+b'  # Verify reading and writing works.
-
-    try:
-      self.report_downloader._DownloadReportCheckFormat(
-          'GZIPPED_CSV', output_file)
-    except googleads.errors.GoogleAdsValueError:
-      self.fail('_DownloadReportCheckFormat raised GoogleAdsValueError'
-                'unexpectedly!')
+    # This would only fail in Python 3, where StringIO is unicode rather than
+    # bytes.
+    if six.PY3:
+      output_file = six.StringIO()
+      self.assertRaises(googleads.errors.GoogleAdsValueError,
+                        self.report_downloader._DownloadReportCheckFormat,
+                        'GZIPPED_CSV', output_file)
 
   def testDownloadReport_failure(self):
     output_file = six.StringIO()
